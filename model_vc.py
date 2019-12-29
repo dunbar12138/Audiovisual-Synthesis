@@ -579,11 +579,11 @@ class Generator(nn.Module):
    
 
 class VideoAudioGenerator(nn.Module):
-    def __init__(self, dim_neck, dim_emb, dim_pre, freq, dim_spec=80, is_train=False, lr=0.001, vocoder_type='wavenet',
-                 multigpu=False, num_speakers=-1, idt_type='L2',
-                 train_wavenet=False, lambda_wavenet=0.001, args=None,
-                 test_path_source=None, test_path_target=None,
-                 residual=False, attention_map=None, use_256=False, loss_content=False):
+    def __init__(self, dim_neck, dim_emb, dim_pre, freq, dim_spec=80, is_train=False, lr=0.001,
+                 multigpu=False, 
+                 lambda_wavenet=0.001, args=None,
+                 residual=False, attention_map=None, use_256=False, loss_content=False,
+                 test_path=None):
         super(VideoAudioGenerator, self).__init__()
 
         self.encoder = MyEncoder(dim_neck, freq, num_mel=dim_spec)
@@ -595,51 +595,34 @@ class VideoAudioGenerator(nn.Module):
         else:
             self.video_decoder = STAGE2_G(residual=residual)
         self.use_256 = use_256
-        self.vocoder_type = vocoder_type
         self.lambda_wavenet = lambda_wavenet
         self.loss_content = loss_content
+        self.multigpu = multigpu
+        self.test_path = test_path
+
+        self.vocoder = WaveRNN(
+            rnn_dims=hparams.voc_rnn_dims,
+            fc_dims=hparams.voc_fc_dims,
+            bits=hparams.bits,
+            pad=hparams.voc_pad,
+            upsample_factors=hparams.voc_upsample_factors,
+            feat_dims=hparams.num_mels,
+            compute_dims=hparams.voc_compute_dims,
+            res_out_dims=hparams.voc_res_out_dims,
+            res_blocks=hparams.voc_res_blocks,
+            hop_length=hparams.hop_size,
+            sample_rate=hparams.sample_rate,
+            mode=hparams.voc_mode
+        )
 
         if is_train:
-            if idt_type == 'L2':
-                self.criterionIdt = torch.nn.MSELoss(reduction='mean')
-            else:
-                self.criterionIdt = torch.nn.L1Loss(reduction='mean')
+            self.criterionIdt = torch.nn.L1Loss(reduction='mean')
             self.opt_encoder = torch.optim.Adam(self.encoder.parameters(), lr=lr)
             self.opt_decoder = torch.optim.Adam(itertools.chain(self.decoder.parameters(), self.postnet.parameters()), lr=lr)
             self.opt_video_decoder = torch.optim.Adam(self.video_decoder.parameters(), lr=lr)
-        self.multigpu = multigpu
-        # self.prepare_test(dim_spec, test_path_source, test_path_target)
 
-        self.train_vocoder = train_wavenet
-        if self.train_vocoder:
-            if vocoder_type == 'wavenet' or vocoder_type == 'griffin':
-                self.vocoder = WaveRNN(
-                    rnn_dims=hparams.voc_rnn_dims,
-                    fc_dims=hparams.voc_fc_dims,
-                    bits=hparams.bits,
-                    pad=hparams.voc_pad,
-                    upsample_factors=hparams.voc_upsample_factors,
-                    feat_dims=hparams.num_mels,
-                    compute_dims=hparams.voc_compute_dims,
-                    res_out_dims=hparams.voc_res_out_dims,
-                    res_blocks=hparams.voc_res_blocks,
-                    hop_length=hparams.hop_size,
-                    sample_rate=hparams.sample_rate,
-                    mode=hparams.voc_mode
-                )
-                self.opt_vocoder = torch.optim.Adam(self.vocoder.parameters(), lr=hparams.voc_lr)
-                self.vocoder_loss_func = F.cross_entropy # Only for RAW
-
-        if attention_map is not None:
-            self.attention_map_large = np.load(attention_map)
-            self.attention_map = cv2.resize(self.attention_map_large, dsize=(128, 128), interpolation=cv2.INTER_CUBIC)
-            # self.attention_map_large = self.attention_map_large.astype(np.float64)
-            # self.attention_map = self.attention_map.astype(np.float64)
-            self.attention_map_large = torch.from_numpy(self.attention_map_large / self.attention_map_large.max()).float()
-            self.attention_map = torch.from_numpy(self.attention_map / self.attention_map.max()).float()
-            self.criterionVideo = torch.nn.L1Loss(reduction='none')
-        else:
-            self.attention_map = None
+            self.opt_vocoder = torch.optim.Adam(self.vocoder.parameters(), lr=hparams.voc_lr)
+            self.vocoder_loss_func = F.cross_entropy # Only for RAW
 
         if multigpu:
             self.encoder = nn.DataParallel(self.encoder)
@@ -674,12 +657,8 @@ class VideoAudioGenerator(nn.Module):
             self.train()
             for i, data in enumerate(dataloader):
                 # print("Processing ..." + str(name))
-                if not self.train_vocoder:
-                    speaker, mel, video, video_large = data
-                    speaker, mel, video, video_large = speaker.to(device), mel.to(device), video.to(device), video_large.to(device)
-                else:
-                    speaker, mel, prev, wav, video, video_large = data
-                    speaker, mel, prev, wav, video, video_large = speaker.to(device), mel.to(device), prev.to(device), wav.to(device), video.to(device), video_large.to(device)
+                speaker, mel, prev, wav, video, video_large = data
+                speaker, mel, prev, wav, video, video_large = speaker.to(device), mel.to(device), prev.to(device), wav.to(device), video.to(device), video_large.to(device)
                 codes, code_unsample = self.encoder(mel, speaker, return_unsample=True)
                 
                 tmp = []
@@ -701,34 +680,24 @@ class VideoAudioGenerator(nn.Module):
                 else:
                     loss_content = torch.from_numpy(np.array(0))
                 
-                if self.attention_map is None:
-                    if not self.use_256:
-                        loss_video = self.criterionIdt(v_stage1, video) + self.criterionIdt(v_stage2, video_large)
-                    else:
-                        loss_video = self.criterionIdt(v_stage2, video_large)
+                if not self.use_256:
+                    loss_video = self.criterionIdt(v_stage1, video) + self.criterionIdt(v_stage2, video_large)
                 else:
-                    loss_large = self.criterionVideo(v_stage2, video_large).mul(self.attention_map_large.unsqueeze(0).to(device)).mean()
-                    loss_small = self.criterionVideo(v_stage1, video).mul(self.attention_map.unsqueeze(0).to(device)).mean()
-                    loss_video = loss_large + loss_small
+                    loss_video = self.criterionIdt(v_stage2, video_large)
+                
                 loss_recon = self.criterionIdt(mel, mel_outputs)
                 loss_recon0 = self.criterionIdt(mel, mel_outputs_postnet)
                 loss_vocoder = 0
 
-                if self.train_vocoder:
-                    if self.vocoder_type == 'wavenet' or self.vocoder_type == 'griffin':
-                        if not self.multigpu:
-                            y_hat = self.vocoder(prev,
-                                            self.vocoder.pad_tensor(mel_outputs_postnet, hparams.voc_pad).transpose(1, 2))
-                        else:
-                            y_hat = self.vocoder(prev,self.vocoder.module.pad_tensor(mel_outputs_postnet, hparams.voc_pad).transpose(1, 2))
-                        y_hat = y_hat.transpose(1, 2).unsqueeze(-1)
-                        # assert (0 <= wav < 2 ** 9).all()
-                        loss_vocoder = self.vocoder_loss_func(y_hat, wav.unsqueeze(-1).to(device))
-                        self.opt_vocoder.zero_grad()
-                    else:
-                        y_hat = self.vocoder((mel_outputs_postnet.transpose(1, 2), wav))
-                        loss_vocoder = self.vocoder_loss_func(y_hat, wav)
-                        self.opt_vocoder.zero_grad()
+                if not self.multigpu:
+                    y_hat = self.vocoder(prev,
+                                    self.vocoder.pad_tensor(mel_outputs_postnet, hparams.voc_pad).transpose(1, 2))
+                else:
+                    y_hat = self.vocoder(prev,self.vocoder.module.pad_tensor(mel_outputs_postnet, hparams.voc_pad).transpose(1, 2))
+                y_hat = y_hat.transpose(1, 2).unsqueeze(-1)
+                # assert (0 <= wav < 2 ** 9).all()
+                loss_vocoder = self.vocoder_loss_func(y_hat, wav.unsqueeze(-1).to(device))
+                self.opt_vocoder.zero_grad()
 
                 loss = loss_video + loss_recon + loss_recon0 + self.lambda_wavenet * loss_vocoder + loss_content
 
@@ -739,8 +708,7 @@ class VideoAudioGenerator(nn.Module):
                 self.opt_encoder.step()
                 self.opt_decoder.step()
                 self.opt_video_decoder.step()
-                if self.train_vocoder:
-                    self.opt_vocoder.step()
+                self.opt_vocoder.step()
 
 
 
@@ -818,7 +786,7 @@ class VideoAudioGenerator(nn.Module):
         return frames, v_mid[0:1], v_hat[0:1]
 
     def test_audiovideo(self, device, writer, niter):
-        source_path = "/mnt/lustre/dengkangle/cmu/datasets/audio/test/trump.wav"
+        source_path = self.test_path
 
         mel_basis80 = librosa.filters.mel(hparams.sample_rate, hparams.n_fft, n_mels=80)
 
@@ -842,15 +810,13 @@ class VideoAudioGenerator(nn.Module):
 
         generated_spec, v_mid, v_hat = generated_spec.cpu(), v_mid.cpu(), v_hat.cpu()
 
-        if self.train_vocoder:
-            print("Generating Wavfile...")
-            with torch.no_grad():
-                if self.vocoder_type == 'wavenet' or self.vocoder_type == 'griffin':
-                    if not self.multigpu:
-                        generated_wav = inv_preemphasis(self.vocoder.generate(generated_spec.to(device).transpose(2, 1), False, None, None, mu_law=True), hparams.preemphasis, hparams.preemphasize)
-                    
-                    else:
-                        generated_wav = inv_preemphasis(self.vocoder.module.generate(generated_spec.to(device).transpose(2, 1), False, None, None, mu_law=True), hparams.preemphasis, hparams.preemphasize)
+        print("Generating Wavfile...")
+        with torch.no_grad():
+            if not self.multigpu:
+                generated_wav = inv_preemphasis(self.vocoder.generate(generated_spec.to(device).transpose(2, 1), False, None, None, mu_law=True), hparams.preemphasis, hparams.preemphasize)
+            
+            else:
+                generated_wav = inv_preemphasis(self.vocoder.module.generate(generated_spec.to(device).transpose(2, 1), False, None, None, mu_law=True), hparams.preemphasis, hparams.preemphasize)
 
 
         writer.add_video('generated', (v_hat.numpy()+1)/2, global_step=niter)

@@ -84,9 +84,9 @@ class SampleVideoDataset(data.Dataset):
         folder_path = data_path + '/' + video_name.split('.')[0] + '/'
         folder = os.path.exists(folder_path)
 
-        if not folder:  # 判断是否存在文件夹如果不存在则创建为文件夹
+        if not folder:  
             print("---  Creating %s...  ---" % folder_path)
-            os.makedirs(folder_path)  # makedirs 创建文件时如果路径不存在会创建这个路径
+            os.makedirs(folder_path)  
             reader = imageio.get_reader(video_path, 'ffmpeg', fps=20)
             for i, im in enumerate(reader):
                 imageio.imwrite(folder_path + str(i).zfill(5) + '.jpg', im)
@@ -141,7 +141,6 @@ class SampleVideoDataset(data.Dataset):
         return self.length
 
     def __getitem__(self, index):
-        # print("I'm heeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeere~~~~~~~~~~~~~~~~~~~~~~~")
         video_length = int(hparams.hop_size / hparams.sample_rate * self.sample_frames * 20)
         # video = np.zeros((video_length, 3, 256, 256))
         video = torch.Tensor(video_length, 3, 128, 128)
@@ -153,11 +152,8 @@ class SampleVideoDataset(data.Dataset):
             i = random.randrange(0, (self.raw_data.shape[1] - self.sample_frames + 1) // 32) * 32
             video_index = int(i / 4)
             for j in range(video_length):
-                # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                # print(j, j+video_index)
                 video[j, :, :, :] = self.transform(Image.open(self.list_frame[j + video_index]).convert('RGB'))
                 video_large[j, :, :, :] = self.transform_large(Image.open(self.list_frame[j + video_index]).convert('RGB'))
-            # print("##############################################################")
             return torch.Tensor(self.speaker), torch.Tensor(self.raw_data[:,i:i+self.sample_frames].T), video, video_large
         else:
             i = random.randrange(1, (self.raw_data.shape[1] - self.sample_frames) // 32) * 32
