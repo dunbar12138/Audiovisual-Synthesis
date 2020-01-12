@@ -32,7 +32,7 @@ if __name__ == "__main__":
        
     parser.add_argument('--multigpu', dest='multigpu', default=False, action='store_true')
     parser.add_argument('--device', default='cuda:0')
-    parser.add_argument('--epochs', default=1000, type=int)
+    parser.add_argument('--epochs', default=600, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--save_freq', default=500, type=int)
     parser.add_argument('--display_freq', default=10, type=int)

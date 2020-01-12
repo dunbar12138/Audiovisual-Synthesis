@@ -1,0 +1,1 @@
+python test_audio.py --model ./saved_models/VC_example_run/Epoch600_Iter00030000.pkl --wav_path example/input_1_Trump.wav --output_file ./result.wav
