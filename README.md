@@ -49,3 +49,11 @@ python train_audiovisual.py --video_path PATH_TO_TRAINING_DATA --experiment_name
 
 
 ### Test
+
+#### Voice Conversion
+
+To convert a wavfile using a trained model, run:
+
+```
+python test_audio.py --model PATH_TO_MODEL --wav_path PATH_TO_INPUT --output_file PATH_TO_OUTPUT
+```
