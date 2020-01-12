@@ -57,3 +57,15 @@ To convert a wavfile using a trained model, run:
 ```
 python test_audio.py --model PATH_TO_MODEL --wav_path PATH_TO_INPUT --output_file PATH_TO_OUTPUT
 ```
+
+#### Audiovisual Synthesis
+
+##### 1-stage generation -- video resolution: 256 * 256
+```
+python test_audiovisual.py --load_model PATH_TO_MODEL --wav_path PATH_TO_INPUT --output_file PATH_TO_OUTPUT --use_256 
+```
+
+#### 2-stage generation -- video resolution: 512 * 512
+```
+python test_audiovisual.py --load_model PATH_TO_MODEL --wav_path PATH_TO_INPUT --output_file PATH_TO_OUTPUT --residual
+```
