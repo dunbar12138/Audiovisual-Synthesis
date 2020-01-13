@@ -1,5 +1,9 @@
 # Audiovisual-Synthesis
-<a href="https://dunbar12138.github.io/projectpage/Audiovisual/index.html">Unsupervised Any-to-many Audiovisual Synthesis via Exemplar Autoencoders</a>, <a href="https://dunbar12138.github.io/">Kangle Deng</a>, <a href="http://www.cs.cmu.edu/~aayushb/">Aayush Bansal</a>, <a href="http://www.cs.cmu.edu/~deva/">Deva Ramanan</a>, <a href="">arXiv</a>
+<b>Unsupervised Any-to-many Audiovisual Synthesis via Exemplar Autoencoders</b>
+
+<a href="https://dunbar12138.github.io/">Kangle Deng</a>, <a href="http://www.cs.cmu.edu/~aayushb/">Aayush Bansal</a>, <a href="http://www.cs.cmu.edu/~deva/">Deva Ramanan</a>
+
+<a href="https://dunbar12138.github.io/projectpage/Audiovisual/index.html">project page</a>/<a href="">arXiv</a>
 
 This repo provides a PyTorch Implementation of our work.
 
