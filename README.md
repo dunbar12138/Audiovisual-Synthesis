@@ -3,7 +3,7 @@
 
 <a href="https://dunbar12138.github.io/">Kangle Deng</a>, <a href="http://www.cs.cmu.edu/~aayushb/">Aayush Bansal</a>, <a href="http://www.cs.cmu.edu/~deva/">Deva Ramanan</a>
 
-<a href="https://dunbar12138.github.io/projectpage/Audiovisual/index.html"> project page </a>/<a href='http://scs00197.sp.cs.cmu.edu/'> demo </a>/<a href=""> arXiv </a>
+<a href="https://dunbar12138.github.io/projectpage/Audiovisual/index.html"> project page </a>/<a href='http://scs00197.sp.cs.cmu.edu/'> demo </a>/<a href="https://arxiv.org/abs/2001.04463"> arXiv </a>
 
 This repo provides a PyTorch Implementation of our work.
 
