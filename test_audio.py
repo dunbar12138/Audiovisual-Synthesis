@@ -30,13 +30,12 @@ def voice_conversion(G, input_wavfile, parallel=True):
     mel_spec = mel_basis.dot(linear_spec)
     mel_db = 20 * np.log10(mel_spec)
     source_spec = np.clip((mel_db + 120) / 125, 0, 1)
-    source_embed = torch.from_numpy(np.array([0, 1])).float()
+    # source_embed = torch.from_numpy(np.array([0, 1])).float()
 
     source_spec, _ = pad_seq(source_spec.T, hparams.freq)
 
     with torch.no_grad():
-        s2t_spec = G.conversion(torch.Tensor(source_embed).unsqueeze(0), torch.Tensor(source_embed).unsqueeze(0),
-                                   torch.Tensor(source_spec).unsqueeze(0), device).cpu()
+        s2t_spec = G.conversion(torch.Tensor(source_spec).unsqueeze(0), device).cpu()
 
     if parallel:
         s2t_wav = G.vocoder.generate(s2t_spec.transpose(1, 2), True, 8000, 800, mu_law=True)

@@ -468,7 +468,7 @@ class Generator(nn.Module):
 
     def train_step(self, x, c_org, mask=None, mask_code=None, prev=None, wav=None,
                    ret_content=False, retain_graph=False, device='cuda:0'):
-        codes = self.encoder(x, c_org)
+        codes = self.encoder(x)
         # print(codes[0].shape)
         content = torch.cat([code.unsqueeze(1) for code in codes], dim=1)
         # print("content shape", content.shape)
@@ -491,7 +491,7 @@ class Generator(nn.Module):
         loss_dict['recon'], loss_dict['recon0'] = loss_recon.data.item(), loss_recon0.data.item()
 
         if self.loss_content:
-            recons_codes = self.encoder(mel_outputs_postnet, c_org)
+            recons_codes = self.encoder(mel_outputs_postnet)
             recons_content = torch.cat([code.unsqueeze(1) for code in recons_codes], dim=1)
             if mask is not None:
                 loss_content = self.criterionIdt(content.masked_select(mask_code.byte()), recons_content.masked_select(mask_code.byte()))

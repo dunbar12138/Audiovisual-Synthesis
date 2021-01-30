@@ -41,8 +41,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_freq', default=500, type=int)
     parser.add_argument('--display_freq', default=10, type=int)
     parser.add_argument('--lambda_wavenet', default=0.01, type=float)
-    parser.add_argument('--test_path_A', default=None)
-    parser.add_argument('--test_path_B', default=None)
+    parser.add_argument('--test_path', default=None)
     parser.add_argument('--load_model', default=None)
     parser.add_argument('--initial_iter', default=0, type=int)
     parser.add_argument('--save_dir', required=True)
@@ -69,8 +68,7 @@ if __name__ == "__main__":
                   lambda_gan=args.lambda_gan,
                   multigpu=args.multigpu,
                   lambda_wavenet=args.lambda_wavenet,
-                  test_path_source=args.test_path_A,
-                  test_path_target=args.test_path_B,
+                  test_path=args.test_path,
                   args=args).to(device)
 
     G.optimize_parameters(dataloader, args.epochs, device, experimentName=experimentName, save_dir=save_dir,
