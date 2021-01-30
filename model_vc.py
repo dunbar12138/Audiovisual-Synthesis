@@ -79,7 +79,7 @@ class MyEncoder(nn.Module):
 
         self.lstm = nn.LSTM(512, dim_neck, 2, batch_first=True, bidirectional=True)
 
-    def forward(self, x, c_org=None, return_unsample=False):
+    def forward(self, x, return_unsample=False):
         # (B, T, n_mel)
         x = x.squeeze(1).transpose(2, 1)
 
@@ -310,7 +310,7 @@ class Generator(nn.Module):
     def __init__(self, dim_neck, dim_emb, dim_pre, freq, dim_spec=80, is_train=False, lr=0.001, loss_content=True,
                  discriminator=False, multigpu=False, lambda_gan=0.0001,
                  lambda_wavenet=0.001, args=None,
-                 test_path_source=None, test_path_target=None):
+                 test_path=None):
         super(Generator, self).__init__()
 
         self.encoder = MyEncoder(dim_neck, freq, num_mel=dim_spec)
@@ -328,7 +328,8 @@ class Generator(nn.Module):
         self.lambda_wavenet = lambda_wavenet
 
         self.multigpu = multigpu
-        self.prepare_test(dim_spec, test_path_source, test_path_target)
+        if test_path is not None:
+            self.prepare_test(dim_spec, test_path)
 
         self.vocoder = WaveRNN(
             rnn_dims=hparams.voc_rnn_dims,
@@ -363,81 +364,49 @@ class Generator(nn.Module):
             if self.dis is not None:
                 self.dis = nn.DataParallel(self.dis)
 
-    def prepare_test(self, dim_spec, source_path=None, target_path=None):
-        if source_path is None:
-            source_path = "/mnt/lustre/dengkangle/cmu/datasets/audio/test/trump_02.wav"
-        if target_path is None:
-            target_path = "/mnt/lustre/dengkangle/cmu/datasets/audio/test/female.wav"
-        # source_path = "/home/kangled/datasets/audio/Chaplin_01.wav"
-        # target_path = "/home/kangled/datasets/audio/Obama_01.wav"
-
+    def prepare_test(self, dim_spec, test_path):
         mel_basis80 = librosa.filters.mel(hparams.sample_rate, hparams.n_fft, n_mels=80)
 
-        wav, sr = librosa.load(source_path, hparams.sample_rate)
+        wav, sr = librosa.load(test_path, hparams.sample_rate)
         wav = preemphasis(wav, hparams.preemphasis, hparams.preemphasize)
         linear_spec = np.abs(
             librosa.stft(wav, n_fft=hparams.n_fft, hop_length=hparams.hop_size, win_length=hparams.win_size))
         mel_spec = mel_basis80.dot(linear_spec)
         mel_db = 20 * np.log10(mel_spec)
         source_spec = np.clip((mel_db + 120) / 125, 0, 1)
-        # source_spec = mel_spec
 
-        self.source_embed = torch.from_numpy(np.array([0, 1])).float().unsqueeze(0)
-        self.source_wav = wav
+        self.test_wav = wav
 
-        wav, sr = librosa.load(target_path, hparams.sample_rate)
-        wav = preemphasis(wav, hparams.preemphasis, hparams.preemphasize)
-        linear_spec = np.abs(
-            librosa.stft(wav, n_fft=hparams.n_fft, hop_length=hparams.hop_size, win_length=hparams.win_size))
-        mel_spec = mel_basis80.dot(linear_spec)
-        mel_db = 20 * np.log10(mel_spec)
-        target_spec = np.clip((mel_db + 120) / 125, 0, 1)
-        # target_spec = mel_spec
-        
-        self.target_embed = torch.from_numpy(np.array([1, 0])).float().unsqueeze(0)
-        self.target_wav = wav
-
-        self.source_spec = torch.Tensor(pad_seq(source_spec.T, hparams.freq)).unsqueeze(0)
-        self.target_spec = torch.Tensor(pad_seq(target_spec.T, hparams.freq)).unsqueeze(0)
+        self.test_spec = torch.Tensor(pad_seq(source_spec.T, hparams.freq)).unsqueeze(0)
 
     def test_fixed(self, device):
         with torch.no_grad():
-            t2s_spec = self.conversion(self.target_embed, self.source_embed, self.target_spec, device).cpu()
-            s2s_spec = self.conversion(self.source_embed, self.source_embed, self.source_spec, device).cpu()
-            s2t_spec = self.conversion(self.source_embed, self.target_embed, self.source_spec, device).cpu()
-            t2t_spec = self.conversion(self.target_embed, self.target_embed, self.target_spec, device).cpu()
+            s2t_spec = self.conversion(self.test_spec, device).cpu()
 
         ret_dic = {}
         ret_dic['A_fake_griffin'], sr = mel2wav(s2t_spec.numpy().squeeze(0).T)
-        ret_dic['B_fake_griffin'], sr = mel2wav(t2s_spec.numpy().squeeze(0).T)
-        ret_dic['A'] = self.source_wav
-        ret_dic['B'] = self.target_wav
+        ret_dic['A'] = self.test_wav
 
         with torch.no_grad():
             if not self.multigpu:
                 ret_dic['A_fake_w'] = inv_preemphasis(self.vocoder.generate(s2t_spec.to(device).transpose(2, 1), False, None, None, mu_law=True),
                                                 hparams.preemphasis, hparams.preemphasize)
-                ret_dic['B_fake_w'] = inv_preemphasis(self.vocoder.generate(t2s_spec.to(device).transpose(2, 1), False, None, None, mu_law=True),
-                                                hparams.preemphasis, hparams.preemphasize)
             else:
                 ret_dic['A_fake_w'] = inv_preemphasis(self.vocoder.module.generate(s2t_spec.to(device).transpose(2, 1), False, None, None, mu_law=True),
-                                                hparams.preemphasis, hparams.preemphasize)
-                ret_dic['B_fake_w'] = inv_preemphasis(self.vocoder.module.generate(t2s_spec.to(device).transpose(2, 1), False, None, None, mu_law=True),
                                                 hparams.preemphasis, hparams.preemphasize)
         return ret_dic, sr
 
 
-    def conversion(self, speaker_org, speaker_trg, spec, device, speed=1):
-        speaker_org, speaker_trg, spec = speaker_org.to(device), speaker_trg.to(device), spec.to(device)
+    def conversion(self, spec, device, speed=1):
+        spec = spec.to(device)
         if not self.multigpu:
-            codes = self.encoder(spec, speaker_org)
+            codes = self.encoder(spec)
         else:
-            codes = self.encoder.module(spec, speaker_org)
+            codes = self.encoder.module(spec)
         tmp = []
         for code in codes:
             tmp.append(code.unsqueeze(1).expand(-1, int(speed * spec.size(1) / len(codes)), -1))
         code_exp = torch.cat(tmp, dim=1)
-        encoder_outputs = torch.cat((code_exp, speaker_trg.unsqueeze(1).expand(-1, code_exp.size(1), -1)), dim=-1)
         mel_outputs = self.decoder(code_exp) if not self.multigpu else self.decoder.module(code_exp)
 
         mel_outputs_postnet = self.postnet(mel_outputs.transpose(2, 1))
@@ -485,11 +454,12 @@ class Generator(nn.Module):
                     torch.save(self.state_dict(), save_dir + '/Epoch' + str(epoch).zfill(3) + '_Iter'
                                + str(niter).zfill(8) + ".pkl")
                     # self.load_state_dict(torch.load('params.pkl'))
-                    if len(dataloader) >= 2:
+                    if len(dataloader) >= 2 and self.test_wav is not None:
                         wav_dic, sr = self.test_fixed(device)
                         for key, wav in wav_dic.items():
                             # print(wav.shape)
                             writer.add_audio(key, wav, niter, sample_rate=sr)
+                        librosa.output.write_wav(save_dir + '/Iter' + str(niter).zfill(8) +'.wav', wav_dic['A_fake_w'].astype(np.float32), hparams.sample_rate)
                     print("Done")
                     self.train()
                 torch.cuda.empty_cache()  # Prevent Out of Memory
@@ -537,8 +507,7 @@ class Generator(nn.Module):
             # true_label = torch.from_numpy(np.ones(shape=(x.shape[0]))).to('cuda:0').long()
             # false_label = torch.from_numpy(np.zeros(shape=(x.shape[0]))).to('cuda:0').long()
 
-            flip_speaker = 1 - c_org
-            fake_mel = self.conversion(c_org, flip_speaker, x, device)
+            fake_mel = self.conversion(x, device)
 
             loss_dis = self.dis_criterion(self.dis(x), True) + self.dis_criterion(self.dis(fake_mel), False)
                        # +  self.dis_criterion(self.dis(mel_outputs_postnet), False)
