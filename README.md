@@ -25,7 +25,7 @@ Then, run: `pip install -r requirements.txt`
 
 ## Data
 
-We provide our CelebAudio Dataset at <a>link</a>.
+We provide our CelebAudio Dataset at <a href='https://drive.google.com/drive/folders/1_3ulcWKhs3eq2WPzAnFF-LJuSp1aTqwA?usp=sharing'>link</a>.
 
 ## Train
 
@@ -35,7 +35,13 @@ Check 'scripts/train_audio.sh' for an example of training a Voice-Conversion mod
 
 Generally, run:
 ```
-python train_audio.py --data_path PATH_TO_TRAINING_DATA --experiment_name EXPERIMENT_NAME --save_freq SAVE_FREQ --test_path_A PATH_TO_TEST_AUDIO --test_path_B PATH_TO_TEST_AUDIO --batch_size BATCH_SIZE --save_dir PATH_TO_SAVE_MODEL
+python train_audio.py --data_path PATH_TO_TRAINING_DATA --experiment_name EXPERIMENT_NAME --save_freq SAVE_FREQ --test_path PATH_TO_TEST_AUDIO --batch_size BATCH_SIZE --save_dir PATH_TO_SAVE_MODEL
+```
+
+You can specify any audio data as PATH_TO_TRAINING_DATA, and a small clip of audio as PATH_TO_TEST_AUDIO. For example, the following script trains an audio model for Barack Obama, and use an input clip for test every 2000 iterations. You can find the saved models and test results in the saving directory.
+
+```
+python train_audio.py --data_path datasets/celebaudio/BarackObama_01.wav --experiment_name VC_example_run --save_freq 2000 --test_path example/input_3_MartinLutherKing.wav  --batch_size 4 --save_dir ./saved_models/
 ```
 
 ### Audiovisual Synthesis
@@ -48,6 +54,13 @@ Generally, run:
 ```
 python train_audiovisual.py --video_path PATH_TO_TRAINING_DATA --experiment_name EXPERIMENT_NAME --save_freq SAVE_FREQ --test_path PATH_TO_TEST_AUDIO --batch_size BATCH_SIZE --save_dir PATH_TO_SAVE_MODEL --use_256 --load_model LOAD_MODEL_PATH
 ```
+
+You can specify any audiovisual data as PATH_TO_TRAINING_DATA, and a small clip of audio as PATH_TO_TEST_AUDIO. The following script trains an audiovisual model based on a pre-trained Obama audio model, and use an input clip for test every 2000 iterations. You can find the saved models and test results in the saving directory.
+
+```
+python train_audiovisual.py --video_path datasets/video/obama.mp4 --experiment_name Audiovisual_example_run --save_freq 2000 --test_path example/input_3_MartinLutherKing.wav --batch_size 4 --save_dir ./saved_models/ --use_256 --load_model ./saved_models/VC_example_run/Epoch600_Iter00030000.pkl
+```
+
 
 #### 2-stage generation -- video resolution: 512 * 512
 
@@ -71,6 +84,12 @@ To convert a wavfile using a trained model, run:
 python test_audio.py --model PATH_TO_MODEL --wav_path PATH_TO_INPUT --output_file PATH_TO_OUTPUT
 ```
 
+You can specify any audio data as PATH_TO_INPUT. For example, the following script converts the input wavfile by use of a pre-trained audio model.
+
+```
+python test_audio.py --model ./saved_models/VC_example_run/Epoch600_Iter00030000.pkl --wav_path example/input_1_Trump.wav --output_file ./result.wav
+```
+
 ### Audiovisual Synthesis
 
 Check 'scripts/test_audiovisual.sh' for an example of testing a Audiovisual-Synthesis model.
@@ -78,6 +97,12 @@ Check 'scripts/test_audiovisual.sh' for an example of testing a Audiovisual-Synt
 #### 1-stage generation -- video resolution: 256 * 256
 ```
 python test_audiovisual.py --load_model PATH_TO_MODEL --wav_path PATH_TO_INPUT --output_file PATH_TO_OUTPUT --use_256 
+```
+
+You can specify any audio data as PATH_TO_INPUT. For example, the following script converts the input wavfile by use of a pre-trained audiovisual model.
+
+```
+python test_audiovisual.py --load_model ./saved_models/Audiovisual_example_run/Epoch600_Iter00030000.pkl --wav_path example/input_1_Trump.wav  --output_file ./result.mp4 --use_256
 ```
 
 #### 2-stage generation -- video resolution: 512 * 512
