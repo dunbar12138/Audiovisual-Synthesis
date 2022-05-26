@@ -10,4 +10,4 @@ scipy==1.1.0
 sklearn==0.0
 torch==1.1.0
 tqdm==4.36.1
-tensorflow-gpu==1.14.0
+tensorflow-gpu==2.7.2
